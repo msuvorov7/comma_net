@@ -1,6 +1,5 @@
 import os
 import bz2
-import sys
 
 from six.moves import urllib
 
