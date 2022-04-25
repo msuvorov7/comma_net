@@ -1,9 +1,15 @@
 import os
 import pickle
+import sys
+
 import pandas as pd
 import re
 
 from transformers import AutoTokenizer
+
+sys.path.insert(0, os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+))
 
 tokenizer = AutoTokenizer.from_pretrained('DeepPavlov/rubert-base-cased-sentence')
 targets = {',': 1, '.': 2}
@@ -67,6 +73,7 @@ def foo(sample_path: str = 'data/raw/lenta/lenta_text.csv'):
 def build_features(sample_path: str = 'data/raw/lenta/lenta_text.csv'):
     text = pd.read_csv(sample_path)['text'].values
     # text = ['казнить, нельзя помиловать.', 'привет со дна.', 'что-то пошло не так (.']
+    # text = text[1:2]
     tokenized_text = [tokenizer.tokenize(sent) for sent in text]
     tokenized_text = [['[SOS]'] + sentence + ['[EOS]'] for sentence in tokenized_text]
     # print(tokenized_text)
@@ -82,6 +89,7 @@ def build_features(sample_path: str = 'data/raw/lenta/lenta_text.csv'):
     # print(input_tokens)
 
     input_ids = list(map(tokenizer.convert_tokens_to_ids, input_tokens))
+
     # print(input_ids)
 
     def shift_target(arr: list) -> list:
@@ -99,19 +107,25 @@ def build_features(sample_path: str = 'data/raw/lenta/lenta_text.csv'):
     def mask_tokens(arr: list) -> list:
         res = [1]  # for [SOS]
         lens = list(
-            map(lambda x: len(tokenizer.tokenize(x)), arr)
+            map(
+                lambda x: len(  # длина массива токенов слова, чтобы найти последний токен (если в слове > 1 токена)
+                    list(
+                        filter(  # выбор токенов не из таргета
+                            lambda token: token not in targets.keys(),
+                            tokenizer.tokenize(x))
+                    )
+                ),
+                arr)
         )
         for i in lens:
             if i > 1:
-                res += [0 for _ in range(i-1)]
+                res += [0 for _ in range(i - 1)]  # все промежуточные токены заполнены нулями
             res.append(1)
         res.append(1)  # for [EOS]
         return res
 
-    pattern = ''.join(targets.keys())
-    cleaned_text = list(map(lambda x: re.sub(f'[{pattern}]', '', x), text))
     target_mask = list(
-        map(lambda sentence: mask_tokens(sentence.split()), cleaned_text))
+        map(lambda sentence: mask_tokens(sentence.split()), text))
     # print(target_mask)
 
     attention_mask = list(map(lambda x: [1 for _ in range(len(x))], input_ids))
@@ -130,7 +144,7 @@ def build_features(sample_path: str = 'data/raw/lenta/lenta_text.csv'):
 
     with open('data/interim/input_ids.pkl', 'rb') as f:
         input_ids = pickle.load(f)
-    print(input_ids)
+    # print(input_ids)
 
 
 if __name__ == '__main__':

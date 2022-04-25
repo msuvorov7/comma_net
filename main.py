@@ -2,13 +2,13 @@ import pickle
 from feature.build_dataloader import build_dataloader
 from feature.dataset import CommaDataset
 from src.data.data_load import download_lenta
-from src.feature.build_dataset import *
+from src.feature.build_features import *
 
 
 if __name__ == '__main__':
     # download_lenta()
     # extract_sample(sample_size=10)
-    foo()
+    # foo()
     build_features()
 
     with open('data/interim/input_ids.pkl', 'rb') as f:
