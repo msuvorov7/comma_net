@@ -72,8 +72,8 @@ def foo(sample_path: str = 'data/raw/lenta/lenta_text.csv'):
 
 def build_features(sample_path: str = 'data/raw/lenta/lenta_text.csv'):
     text = pd.read_csv(sample_path)['text'].values
-    # text = ['казнить, нельзя помиловать.', 'привет со дна.', 'что-то пошло не так (.']
-    # text = text[1:2]
+    # text = ['казнить, нельзя помиловать#.', 'привет со дна #38.', 'что-то пошло не так (.']
+    # text = text[0:1]
     tokenized_text = [tokenizer.tokenize(sent) for sent in text]
     tokenized_text = [['[SOS]'] + sentence + ['[EOS]'] for sentence in tokenized_text]
     # print(tokenized_text)
@@ -104,34 +104,26 @@ def build_features(sample_path: str = 'data/raw/lenta/lenta_text.csv'):
 
     # print(input_targets)
 
-    def mask_tokens(arr: list) -> list:
-        res = [1]  # for [SOS]
-        lens = list(
-            map(
-                lambda x: len(  # длина массива токенов слова, чтобы найти последний токен (если в слове > 1 токена)
-                    list(
-                        filter(  # выбор токенов не из таргета
-                            lambda token: token not in targets.keys(),
-                            tokenizer.tokenize(x))
-                    )
-                ),
-                arr)
-        )
-        for i in lens:
-            if i > 1:
-                res += [0 for _ in range(i - 1)]  # все промежуточные токены заполнены нулями
-            res.append(1)
-        res.append(1)  # for [EOS]
+    def mask_tokens(tokens: list) -> list:
+        res = []
+        for i in range(len(tokens) - 1):
+            if tokens[i + 1][0] != '#':
+                res.append(1)
+            elif tokens[i + 1] == '#':
+                res.append(1)
+            elif tokens[i + 1][0] == '#':
+                res.append(0)
+            else:
+                raise NotImplementedError
+        res.append(1)
+        assert len(res) == len(tokens)
         return res
 
-    target_mask = list(
-        map(lambda sentence: mask_tokens(sentence.split()), text))
-    # print(target_mask)
+    target_mask = list(map(lambda x: mask_tokens(x), input_tokens))
+    print(target_mask)
 
     attention_mask = list(map(lambda x: [1 for _ in range(len(x))], input_ids))
-    # print(attention_mask)
-
-    # return input_ids, input_targets, target_mask, attention_mask
+    print(attention_mask)
 
     with open('data/interim/input_ids.pkl', 'wb') as f:
         pickle.dump(input_ids, f)
@@ -144,7 +136,6 @@ def build_features(sample_path: str = 'data/raw/lenta/lenta_text.csv'):
 
     with open('data/interim/input_ids.pkl', 'rb') as f:
         input_ids = pickle.load(f)
-    # print(input_ids)
 
 
 if __name__ == '__main__':

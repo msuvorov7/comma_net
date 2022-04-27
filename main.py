@@ -1,15 +1,16 @@
 import pickle
 from feature.build_dataloader import build_dataloader
 from feature.dataset import CommaDataset
+from model.train_model import fit
 from src.data.data_load import download_lenta
 from src.feature.build_features import *
 
 
 if __name__ == '__main__':
     # download_lenta()
-    # extract_sample(sample_size=10)
+    # extract_sample(sample_size=10_000)
     # foo()
-    build_features()
+    # build_features()
 
     with open('data/interim/input_ids.pkl', 'rb') as f:
         input_ids = pickle.load(f)
@@ -22,13 +23,17 @@ if __name__ == '__main__':
 
     print('data loaded')
     dataset = CommaDataset(input_ids, input_targets, target_mask, attention_mask)
-    print(dataset[0])
+    # print(dataset[0])
     train_dataloader = build_dataloader(dataset, 2)
 
-    for batch in train_dataloader:
-        x, y, y_mask, att_mask = batch['feature'], batch['target'], batch['target_mask'], batch['attention_mask']
-        print(x)
-        print(y)
-        print(y_mask)
-        print(att_mask)
-        break
+    print(len(dataset))
+
+    # for batch in train_dataloader:
+    #     x, y, y_mask, att_mask = batch['feature'], batch['target'], batch['target_mask'], batch['attention_mask']
+    #     print(x)
+    #     print(y)
+    #     print(y_mask)
+    #     print(att_mask)
+    #     break
+
+    fit(dataset, 2)
