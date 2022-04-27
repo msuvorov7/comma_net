@@ -38,6 +38,7 @@ class TestDataset(unittest.TestCase):
             self.assertTrue(x.shape == y.shape == y_mask.shape == att_mask.shape)
 
     def test_batch_shape(self):
+        # cut_text(100)
         # build_features()
 
         with open('../data/interim/input_ids.pkl', 'rb') as f:

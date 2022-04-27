@@ -8,9 +8,9 @@ from src.feature.build_features import *
 
 if __name__ == '__main__':
     # download_lenta()
-    # extract_sample(sample_size=10_000)
-    # foo()
-    # build_features()
+    # extract_sample(sample_size=100)
+    cut_text(100)
+    build_features()
 
     with open('data/interim/input_ids.pkl', 'rb') as f:
         input_ids = pickle.load(f)

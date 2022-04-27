@@ -24,53 +24,22 @@ def punctuation():
     pass
 
 
-def foo(sample_path: str = 'data/raw/lenta/lenta_text.csv'):
-    text = ['казнить, нельзя помиловать.', 'привет со дна.']
-    tokenized_texts = [tokenizer.tokenize(sent) for sent in text]
-    tokenized_texts = [['[SOS]'] + sentense + ['[EOS]'] for sentense in tokenized_texts]
+def cut_text(max_length: int, sample_path: str = 'data/raw/lenta/lenta_text.csv'):
+    text = pd.read_csv(sample_path)['text'].values
 
-    TOKENS = []
-    Y = []
-    for i in tokenized_texts:
-        token = []
-        y = []
-        y_mask = []
-        # для простоты оставили только два класса
-        for word in i:
-            if word == ',':
-                y = y[:-1]
-                y.append(1)
-            elif word == '.':
-                y = y[:-1]
-                y.append(2)
-            else:
-                token.append(word)
-                y.append(0)
-        TOKENS.append(token)
-        Y.append(y)
-    print(Y[0])
-    print(TOKENS[0])
+    def reshape_sentence(sentence_splitted: list, n: int) -> str:
+        for i in range(0, len(sentence_splitted), n):
+            yield ' '.join(sentence_splitted[i:i + n])
 
-    Y_MASK = []
-    for i in text:
-        y_mask = [1]
-        for word in i.replace('—', '').replace(',', '').replace('.', '').split():
-            # print(tokenizer.tokenize(word))
-            word_pieces = tokenizer.tokenize(word)
-            if len(word_pieces) == 1:
-                y_mask.append(1)
-            else:
-                y_mask += [0 for _ in range(len(word_pieces) - 1)]
-                y_mask.append(1)
-        y_mask.append(1)
-        Y_MASK.append(y_mask)
-    print(Y_MASK[0])
+    res = []
+    for sample in text:
+        for sentence in reshape_sentence(sample.split(), max_length):
+            res.append(sentence.lower())
 
-    input_ids = [tokenizer.convert_tokens_to_ids(x) for x in TOKENS]
-    return text
+    pd.DataFrame(res, columns=['text']).to_csv('data/interim/lenta_cutted.csv', index=False)
 
 
-def build_features(sample_path: str = 'data/raw/lenta/lenta_text.csv'):
+def build_features(sample_path: str = 'data/interim/lenta_cutted.csv'):
     text = pd.read_csv(sample_path)['text'].values
     # text = ['казнить, нельзя помиловать#.', 'привет со дна #38.', 'что-то пошло не так (.']
     # text = text[0:1]
@@ -120,10 +89,10 @@ def build_features(sample_path: str = 'data/raw/lenta/lenta_text.csv'):
         return res
 
     target_mask = list(map(lambda x: mask_tokens(x), input_tokens))
-    print(target_mask)
+    # print(target_mask)
 
     attention_mask = list(map(lambda x: [1 for _ in range(len(x))], input_ids))
-    print(attention_mask)
+    # print(attention_mask)
 
     with open('data/interim/input_ids.pkl', 'wb') as f:
         pickle.dump(input_ids, f)
@@ -140,4 +109,5 @@ def build_features(sample_path: str = 'data/raw/lenta/lenta_text.csv'):
 
 if __name__ == '__main__':
     extract_sample()
-    foo()
+    cut_text(100)
+    build_features()
