@@ -7,6 +7,7 @@ from tqdm import tqdm
 
 from feature.build_dataloader import build_dataloader
 from model.model import CommaModel
+from visualization.visualize import plot_loss
 
 
 def train(epoch: int,
@@ -87,7 +88,7 @@ def fit(dataset: Dataset, epochs: int):
     criterion = nn.CrossEntropyLoss()
 
     train_losses = []
-    # val_losses = []
+    val_losses = []
     train_accuracy = []
     # val_accuracy = []
 
@@ -104,4 +105,4 @@ def fit(dataset: Dataset, epochs: int):
     torch.save(model, 'models/model.pth')
 
     # plot_psnr(train_psnrs, val_psnrs)
-    # plot_loss(train_losses, val_losses)
+    plot_loss(train_losses, val_losses)

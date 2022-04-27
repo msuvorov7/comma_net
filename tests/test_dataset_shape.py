@@ -16,13 +16,13 @@ class TestDataset(unittest.TestCase):
     def test_dataset_shape(self):
         # build_features()
 
-        with open('../data/interim/input_ids.pkl', 'rb') as f:
+        with open('../data/processed/input_ids.pkl', 'rb') as f:
             input_ids = pickle.load(f)
-        with open('../data/interim/input_targets.pkl', 'rb') as f:
+        with open('../data/processed/input_targets.pkl', 'rb') as f:
             input_targets = pickle.load(f)
-        with open('../data/interim/target_mask.pkl', 'rb') as f:
+        with open('../data/processed/target_mask.pkl', 'rb') as f:
             target_mask = pickle.load(f)
-        with open('../data/interim/attention_mask.pkl', 'rb') as f:
+        with open('../data/processed/attention_mask.pkl', 'rb') as f:
             attention_mask = pickle.load(f)
 
         print('data loaded')
@@ -41,13 +41,13 @@ class TestDataset(unittest.TestCase):
         # cut_text(100)
         # build_features()
 
-        with open('../data/interim/input_ids.pkl', 'rb') as f:
+        with open('../data/processed/input_ids.pkl', 'rb') as f:
             input_ids = pickle.load(f)
-        with open('../data/interim/input_targets.pkl', 'rb') as f:
+        with open('../data/processed/input_targets.pkl', 'rb') as f:
             input_targets = pickle.load(f)
-        with open('../data/interim/target_mask.pkl', 'rb') as f:
+        with open('../data/processed/target_mask.pkl', 'rb') as f:
             target_mask = pickle.load(f)
-        with open('../data/interim/attention_mask.pkl', 'rb') as f:
+        with open('../data/processed/attention_mask.pkl', 'rb') as f:
             attention_mask = pickle.load(f)
 
         print('data loaded')

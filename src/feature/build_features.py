@@ -34,13 +34,17 @@ def cut_text(max_length: int, sample_path: str = 'data/raw/lenta/lenta_text.csv'
     res = []
     for sample in text:
         for sentence in reshape_sentence(sample.split(), max_length):
-            res.append(sentence.lower())
+            res.append(sentence)
 
     pd.DataFrame(res, columns=['text']).to_csv('data/interim/lenta_cutted.csv', index=False)
 
 
-def build_features(sample_path: str = 'data/interim/lenta_cutted.csv'):
-    text = pd.read_csv(sample_path)['text'].values
+def build_features(sample_path: str = 'data/interim/lenta_cutted.csv',
+                   text: list = None,
+                   return_features: bool = False
+                   ):
+    if text is None:
+        text = pd.read_csv(sample_path)['text'].values
     # text = ['казнить, нельзя помиловать#.', 'привет со дна #38.', 'что-то пошло не так (.']
     # text = text[0:1]
     tokenized_text = [tokenizer.tokenize(sent) for sent in text]
@@ -94,17 +98,20 @@ def build_features(sample_path: str = 'data/interim/lenta_cutted.csv'):
     attention_mask = list(map(lambda x: [1 for _ in range(len(x))], input_ids))
     # print(attention_mask)
 
-    with open('data/interim/input_ids.pkl', 'wb') as f:
+    with open('data/processed/input_ids.pkl', 'wb') as f:
         pickle.dump(input_ids, f)
-    with open('data/interim/input_targets.pkl', 'wb') as f:
+    with open('data/processed/input_targets.pkl', 'wb') as f:
         pickle.dump(input_targets, f)
-    with open('data/interim/target_mask.pkl', 'wb') as f:
+    with open('data/processed/target_mask.pkl', 'wb') as f:
         pickle.dump(target_mask, f)
-    with open('data/interim/attention_mask.pkl', 'wb') as f:
+    with open('data/processed/attention_mask.pkl', 'wb') as f:
         pickle.dump(attention_mask, f)
 
-    with open('data/interim/input_ids.pkl', 'rb') as f:
+    with open('data/processed/input_ids.pkl', 'rb') as f:
         input_ids = pickle.load(f)
+
+    if return_features:
+        return input_ids, input_targets, target_mask, attention_mask
 
 
 if __name__ == '__main__':
