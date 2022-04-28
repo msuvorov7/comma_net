@@ -8,8 +8,8 @@ from src.feature.build_features import *
 
 
 if __name__ == '__main__':
-    # download_lenta()
-    # extract_sample(sample_size=100)
+    download_lenta()
+    extract_sample(sample_size=1_000)
     cut_text(100)
     build_features()
 
@@ -25,7 +25,7 @@ if __name__ == '__main__':
     print('data loaded')
     dataset = CommaDataset(input_ids, input_targets, target_mask, attention_mask)
     # print(dataset[0])
-    train_dataloader = build_dataloader(dataset, 2)
+    # train_dataloader = build_dataloader(dataset, 32)
 
     print(len(dataset))
 
@@ -37,5 +37,5 @@ if __name__ == '__main__':
     #     print(att_mask)
     #     break
 
-    fit(dataset, 2)
+    fit(dataset, 4)
     predict()

@@ -12,14 +12,17 @@ def predict():
     input_ids, input_targets, target_mask, attention_mask = build_features(
         text=text,
         return_features=True)
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
     dataset = CommaDataset(input_ids, input_targets, target_mask, attention_mask)
     train_dataloader = build_dataloader(dataset, 1)
     model = torch.load('models/model.pth')
-
+    model.to(device)
     with torch.no_grad():
         for batch in train_dataloader:
             x, y, y_mask, att_mask = batch['feature'], batch['target'], batch['target_mask'], batch['attention_mask']
             y_mask = y_mask.view(-1)
+            x = x.to(device)
+            att_mask = att_mask.to(device)
             y_predict = model(x, att_mask)
 
     y_predict = y_predict.view(-1, y_predict.shape[2])

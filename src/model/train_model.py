@@ -7,7 +7,7 @@ from tqdm import tqdm
 
 from feature.build_dataloader import build_dataloader
 from model.model import CommaModel
-from visualization.visualize import plot_loss
+from visualization.visualize import plot_loss, plot_acc
 
 
 def train(epoch: int,
@@ -46,7 +46,6 @@ def train(epoch: int,
             print(x.shape)
             print(att_mask.shape)
             continue
-            raise NotImplementedError
         # print(y_predict.shape)
 
         y_predict = y_predict.view(-1, y_predict.shape[2])
@@ -69,10 +68,8 @@ def train(epoch: int,
     return train_loss, train_accuracy
 
 
-def fit(dataset: Dataset, epochs: int):
+def fit(dataset: Dataset, epochs: int, batch_size: int = 128):
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-
-    batch_size = 32
 
     training_data_loader = build_dataloader(dataset, batch_size)
 
@@ -84,13 +81,13 @@ def fit(dataset: Dataset, epochs: int):
     for param in model.pretrained_transformer.parameters():
         param.requires_grad = False
 
-    optimizer = optim.Adam(model.parameters(), lr=2e-4)
+    optimizer = optim.Adam(model.parameters(), lr=1e-3)
     criterion = nn.CrossEntropyLoss()
 
     train_losses = []
     val_losses = []
     train_accuracy = []
-    # val_accuracy = []
+    val_accuracy = []
 
     for epoch in range(1, epochs):
         train_loss, train_acc = train(epoch, model, training_data_loader, criterion, optimizer, device)
@@ -100,9 +97,9 @@ def fit(dataset: Dataset, epochs: int):
         train_losses.append(train_loss)
         # val_losses.append(val_loss)
         train_accuracy.append(train_acc)
-        # val_psnrs.append(val_acc)
+        # val_accuracy.append(val_acc)
 
     torch.save(model, 'models/model.pth')
 
-    # plot_psnr(train_psnrs, val_psnrs)
+    plot_acc(train_accuracy, val_accuracy)
     plot_loss(train_losses, val_losses)
