@@ -4,7 +4,7 @@ import bz2
 from six.moves import urllib
 
 
-def download_lenta(path: str = 'data/raw'):
+def download_lenta(path: str = 'data/raw') -> str:
     output_dir = os.path.join(path, 'lenta')
 
     if not os.path.exists(output_dir):
@@ -27,5 +27,3 @@ def download_lenta(path: str = 'data/raw'):
     return output_dir
 
 
-if __name__ == '__main__':
-    download_lenta()

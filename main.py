@@ -8,34 +8,37 @@ from src.feature.build_features import *
 
 
 if __name__ == '__main__':
-    download_lenta()
-    extract_sample(sample_size=1_000)
-    cut_text(100)
-    build_features()
-
-    with open('data/processed/input_ids.pkl', 'rb') as f:
-        input_ids = pickle.load(f)
-    with open('data/processed/input_targets.pkl', 'rb') as f:
-        input_targets = pickle.load(f)
-    with open('data/processed/target_mask.pkl', 'rb') as f:
-        target_mask = pickle.load(f)
-    with open('data/processed/attention_mask.pkl', 'rb') as f:
-        attention_mask = pickle.load(f)
-
-    print('data loaded')
-    dataset = CommaDataset(input_ids, input_targets, target_mask, attention_mask)
-    # print(dataset[0])
-    # train_dataloader = build_dataloader(dataset, 32)
-
-    print(len(dataset))
-
-    # for batch in train_dataloader:
-    #     x, y, y_mask, att_mask = batch['feature'], batch['target'], batch['target_mask'], batch['attention_mask']
-    #     print(x)
-    #     print(y)
-    #     print(y_mask)
-    #     print(att_mask)
-    #     break
-
-    fit(dataset, 4)
+    # download_lenta()
+    # extract_sample(sample_size=1_000)
+    # cut_text(100)
+    # build_features()
+    #
+    # with open('data/processed/input_ids.pkl', 'rb') as f:
+    #     input_ids = pickle.load(f)
+    # with open('data/processed/input_targets.pkl', 'rb') as f:
+    #     input_targets = pickle.load(f)
+    # with open('data/processed/target_mask.pkl', 'rb') as f:
+    #     target_mask = pickle.load(f)
+    # with open('data/processed/attention_mask.pkl', 'rb') as f:
+    #     attention_mask = pickle.load(f)
+    #
+    # print('data loaded')
+    # dataset = CommaDataset(input_ids, input_targets, target_mask, attention_mask)
+    # # print(dataset[0])
+    # # train_dataloader = build_dataloader(dataset, 32)
+    #
+    # print(len(dataset))
+    #
+    # # for batch in train_dataloader:
+    # #     x, y, y_mask, att_mask = batch['feature'], batch['target'], batch['target_mask'], batch['attention_mask']
+    # #     print(x)
+    # #     print(y)
+    # #     print(y_mask)
+    # #     print(att_mask)
+    # #     break
+    #
+    # fit(dataset, 4)
+    # text = ['Показатели давления могут изменяться в зависимости от ряда факторов Даже у одного и того же '
+    #         'пациента в течение суток наблюдаются колебания АД Например утром после пробуждения кровяное '
+    #         'давление может быть низким после обеда оно может начать подниматься']
     predict()

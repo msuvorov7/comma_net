@@ -6,9 +6,6 @@ import pandas as pd
 
 from transformers import AutoTokenizer
 
-sys.path.insert(0, os.path.dirname(
-    os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
-))
 
 tokenizer = AutoTokenizer.from_pretrained('DeepPavlov/rubert-base-cased-sentence')
 targets = {',': 1, '.': 2}
@@ -19,12 +16,14 @@ def extract_sample(dataset_path: str = 'data/raw/lenta/lenta.csv', sample_size: 
     pd.read_csv(dataset_path, low_memory=False)['text'][:sample_size].to_csv(output_path)
 
 
-def punctuation():
-    pass
-
-
-def cut_text(max_length: int, sample_path: str = 'data/raw/lenta/lenta_text.csv'):
-    text = pd.read_csv(sample_path)['text'].values
+def cut_text(max_length: int,
+             sample_path: str = 'data/raw/lenta/lenta_text.csv',
+             text: list = None,
+             return_text: bool = False,
+             is_train: bool = True,
+             ):
+    if text is None:
+        text = pd.read_csv(sample_path)['text'].values
 
     def reshape_sentence(sentence_splitted: list, n: int) -> str:
         for i in range(0, len(sentence_splitted), n):
@@ -35,12 +34,17 @@ def cut_text(max_length: int, sample_path: str = 'data/raw/lenta/lenta_text.csv'
         for sentence in reshape_sentence(sample.split(), max_length):
             res.append(sentence)
 
-    pd.DataFrame(res, columns=['text']).to_csv('data/interim/lenta_cutted.csv', index=False)
+    if is_train:
+        pd.DataFrame(res, columns=['text']).to_csv('data/interim/lenta_cutted.csv', index=False)
+
+    if return_text:
+        return res
 
 
 def build_features(sample_path: str = 'data/interim/lenta_cutted.csv',
                    text: list = None,
-                   return_features: bool = False
+                   return_features: bool = False,
+                   is_train: bool = True
                    ):
     if text is None:
         text = pd.read_csv(sample_path)['text'].values
@@ -97,23 +101,15 @@ def build_features(sample_path: str = 'data/interim/lenta_cutted.csv',
     attention_mask = list(map(lambda x: [1 for _ in range(len(x))], input_ids))
     # print(attention_mask)
 
-    with open('data/processed/input_ids.pkl', 'wb') as f:
-        pickle.dump(input_ids, f)
-    with open('data/processed/input_targets.pkl', 'wb') as f:
-        pickle.dump(input_targets, f)
-    with open('data/processed/target_mask.pkl', 'wb') as f:
-        pickle.dump(target_mask, f)
-    with open('data/processed/attention_mask.pkl', 'wb') as f:
-        pickle.dump(attention_mask, f)
-
-    with open('data/processed/input_ids.pkl', 'rb') as f:
-        input_ids = pickle.load(f)
+    if is_train:
+        with open('data/processed/input_ids.pkl', 'wb') as f:
+            pickle.dump(input_ids, f)
+        with open('data/processed/input_targets.pkl', 'wb') as f:
+            pickle.dump(input_targets, f)
+        with open('data/processed/target_mask.pkl', 'wb') as f:
+            pickle.dump(target_mask, f)
+        with open('data/processed/attention_mask.pkl', 'wb') as f:
+            pickle.dump(attention_mask, f)
 
     if return_features:
         return input_ids, input_targets, target_mask, attention_mask
-
-
-if __name__ == '__main__':
-    extract_sample()
-    cut_text(100)
-    build_features()

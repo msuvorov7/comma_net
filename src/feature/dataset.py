@@ -3,7 +3,7 @@ from torch.utils.data import Dataset
 
 
 class CommaDataset(Dataset):
-    def __init__(self, input_ids, input_targets, target_mask, attention_mask):
+    def __init__(self, input_ids: list, input_targets: list, target_mask: list, attention_mask: list):
         self.input_ids = list(map(torch.tensor, input_ids))
         self.input_targets = list(map(torch.tensor, input_targets))
         self.target_mask = list(map(torch.tensor, target_mask))
@@ -17,5 +17,5 @@ class CommaDataset(Dataset):
             'attention_mask': self.attention_mask[item]
         }
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.input_ids)
