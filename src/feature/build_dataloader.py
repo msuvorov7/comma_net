@@ -2,7 +2,7 @@ import torch
 from torch.utils.data import DataLoader, Dataset
 
 
-def collate_fn(batch):
+def collate_fn(batch) -> dict:
     max_len = max(len(row["feature"]) for row in batch)
 
     input_ids = torch.empty((len(batch), max_len), dtype=torch.long)
@@ -25,6 +25,6 @@ def collate_fn(batch):
     }
 
 
-def build_dataloader(dataset: Dataset, batch_size: int):
+def build_dataloader(dataset: Dataset, batch_size: int) -> DataLoader:
     loader = DataLoader(dataset, batch_size=batch_size, collate_fn=collate_fn)
     return loader

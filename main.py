@@ -11,7 +11,7 @@ if __name__ == '__main__':
     download_lenta()
     extract_sample(sample_size=1_000)
     cut_text(100)
-    build_features()
+    build_features(return_features=False, is_train=True)
 
     with open('data/processed/input_ids.pkl', 'rb') as f:
         input_ids = pickle.load(f)
