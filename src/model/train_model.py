@@ -148,8 +148,6 @@ def fit(model: nn.Module,
         train_accuracy.append(train_acc)
         # val_accuracy.append(val_acc)
 
-    torch.save(model, 'models/model.pth')
-
     plot_acc(train_accuracy, val_accuracy)
     plot_loss(train_losses, val_losses)
 
