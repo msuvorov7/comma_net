@@ -4,7 +4,6 @@ import os
 import pickle
 import sys
 
-import numpy as np
 import pandas as pd
 import yaml
 from tqdm import tqdm
@@ -49,31 +48,6 @@ class ContentWrapper:
 def extract_sample(directiry_path: str, mode: str, sample_size: int):
     dataset_path = directiry_path + f'{mode}.csv'
     pd.read_csv(dataset_path, low_memory=False)['text'][:sample_size].to_csv(directiry_path + f'{mode}_sample.csv')
-
-
-def cut_text(max_length: int,
-             sample_path: str = 'data_load/raw/lenta/lenta_text.csv',
-             text: list = None,
-             return_text: bool = False,
-             is_train: bool = True,
-             ):
-    if text is None:
-        text = pd.read_csv(sample_path)['text'].values
-
-    def reshape_sentence(sentence_splitted: list, n: int) -> str:
-        for i in range(0, len(sentence_splitted), n):
-            yield ' '.join(sentence_splitted[i:i + n])
-
-    res = []
-    for sample in text:
-        for sentence in reshape_sentence(sample.split(), max_length):
-            res.append(sentence)
-
-    if is_train:
-        pd.DataFrame(res, columns=['text']).to_csv('data_load/interim/lenta_cutted.csv', index=False)
-
-    if return_text:
-        return res
 
 
 def build_features(text: str):
