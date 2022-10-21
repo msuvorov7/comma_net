@@ -1,0 +1,36 @@
+stages:
+
+  data_load:
+    cmd: python src/data_load/data_load.py --test_size=0.35
+    deps:
+      - src/data_load/data_load.py
+    outs:
+      - data/raw/lenta.csv
+      - data/raw/train.csv
+      - data/raw/test.csv
+
+  build_train:
+    cmd: python src/feature/build_feature.py --mode=train --sample_size=10000
+    deps:
+      - src/feature/build_feature.py
+      - data/raw/train.csv
+    outs:
+      - data/processed/train_dataset.pkl
+
+  build_test:
+    cmd: python src/feature/build_feature.py --mode=test --sample_size=1000
+    deps:
+      - src/feature/build_feature.py
+      - data/raw/test.csv
+    outs:
+      - data/processed/test_dataset.pkl
+
+  train_model:
+    cmd: python src/model/train_model.py --epoch=1
+    deps:
+      - src/model/train_model.py
+      - src/model/model.py
+      - data/processed/train_dataset.pkl
+      - data/processed/test_dataset.pkl
+    outs:
+      - models/model.torch
