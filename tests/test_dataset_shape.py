@@ -3,13 +3,15 @@ import pickle
 import sys
 import unittest
 
-from feature.build_dataloader import build_dataloader
-from feature.build_features import build_features
+from torch.utils.data import DataLoader
+
 from feature.dataset import CommaDataset
 
 # sys.path.insert(0, os.path.dirname(
 #     os.path.dirname(os.path.realpath(__file__))
 # ))
+
+from model.train_model import collate_fn
 
 
 class TestDataset(unittest.TestCase):
@@ -25,7 +27,7 @@ class TestDataset(unittest.TestCase):
         with open('../data/processed/attention_mask.pkl', 'rb') as f:
             attention_mask = pickle.load(f)
 
-        print('data loaded')
+        print('data_load loaded')
         dataset = CommaDataset(input_ids, input_targets, target_mask, attention_mask)
 
         for i, batch in enumerate(dataset):
@@ -50,9 +52,9 @@ class TestDataset(unittest.TestCase):
         with open('../data/processed/attention_mask.pkl', 'rb') as f:
             attention_mask = pickle.load(f)
 
-        print('data loaded')
+        print('data_load loaded')
         dataset = CommaDataset(input_ids, input_targets, target_mask, attention_mask)
-        train_dataloader = build_dataloader(dataset, 1)
+        train_dataloader = DataLoader(dataset, batch_size=1, collate_fn=collate_fn, shuffle=False)
         for i, batch in enumerate(train_dataloader):
             x, y, y_mask, att_mask = batch['feature'], batch['target'], batch['target_mask'], batch['attention_mask']
             # print(x.shape)
