@@ -26,7 +26,11 @@ logging.basicConfig(
 
 
 def download_dataset(directory_path: str) -> None:
-
+    """
+    Загрузка датасета новостей Ленты
+    :param directory_path: путь до raw директории
+    :return:
+    """
     if not os.path.exists(directory_path):
         os.makedirs(directory_path)
     url = 'https://github.com/yutkin/Lenta.Ru-News-Dataset/releases/download/v1.1/lenta-ru-news.csv.bz2'
@@ -47,6 +51,12 @@ def download_dataset(directory_path: str) -> None:
 
 
 def train_test_split_dataset(directory_path: str, test_size: float):
+    """
+    Разделение датасета на train и test части по фиксированному random_state
+    :param directory_path: путь до raw директории
+    :param test_size: размер тестовой части
+    :return:
+    """
     df = pd.read_csv(directory_path + 'lenta.csv')
 
     train, test, _, _ = train_test_split(df,

@@ -8,7 +8,7 @@ import torch
 import torch.optim as optim
 import torch.nn as nn
 import yaml
-from torch.utils.data import DataLoader, Dataset, random_split
+from torch.utils.data import DataLoader, random_split
 from tqdm import tqdm
 
 sys.path.insert(0, os.path.dirname(
@@ -31,24 +31,31 @@ logging.basicConfig(
 
 
 def collate_fn(batch) -> dict:
+    """
+    Обработчик батча перед входом в модель.
+    Забивает предложения pad-токенами до длинны самого длинного
+    предложения в батче
+    :param batch: батч данных
+    :return:
+    """
     max_len = max(len(row["feature"]) for row in batch)
 
     input_ids = torch.empty((len(batch), max_len), dtype=torch.long)
     input_target = torch.empty((len(batch), max_len), dtype=torch.long)
-    target_mask = torch.empty((len(batch), max_len), dtype=torch.long)
+    word_mask = torch.empty((len(batch), max_len), dtype=torch.long)
     attention_mask = torch.empty((len(batch), max_len), dtype=torch.long)
 
     for idx, row in enumerate(batch):
         to_pad = max_len - len(row["feature"])
         input_ids[idx] = torch.cat((row["feature"], torch.zeros(to_pad)))
         input_target[idx] = torch.cat((row["target"], torch.zeros(to_pad)))
-        target_mask[idx] = torch.cat((row["target_mask"], torch.zeros(to_pad)))
+        word_mask[idx] = torch.cat((row["word_mask"], torch.zeros(to_pad)))
         attention_mask[idx] = torch.cat((row["attention_mask"], torch.zeros(to_pad)))
 
     return {
         'feature': input_ids,
         'target': input_target,
-        'target_mask': target_mask,
+        'word_mask': word_mask,
         'attention_mask': attention_mask
     }
 
@@ -60,7 +67,6 @@ def train(model: nn.Module,
           device: str):
     """
     функция для обучения на одной эпохе
-    :param epoch: номер эпохи
     :param model: модель для обучения
     :param training_data_loader: тренировочный DataLoader
     :param criterion: функция потерь
@@ -76,27 +82,19 @@ def train(model: nn.Module,
 
     model.train()
     for batch in tqdm(training_data_loader):
-        x, y, y_mask, att_mask = batch['feature'], batch['target'], batch['target_mask'], batch['attention_mask']
+        x, y, w_mask, att_mask = batch['feature'], batch['target'], batch['word_mask'], batch['attention_mask']
         x = x.to(device)
         y = y.view(-1).to(device)
-        y_mask = y_mask.view(-1).to(device)
+        w_mask = w_mask.view(-1).to(device)
         att_mask = att_mask.to(device)
 
         y_predict = model(x, att_mask)
-
-        # try:
-        #     y_predict = model(x, att_mask)
-        # except:
-        #     print(x.shape)
-        #     print(att_mask.shape)
-        #     continue
-        # print(y_predict.shape)
 
         y_predict = y_predict.view(-1, y_predict.shape[2])
         loss = criterion(y_predict, y)
 
         y_predict = torch.argmax(y_predict, dim=1).view(-1)
-        correct += torch.sum(y_mask * (y_predict == y)).item()
+        correct += torch.sum(w_mask * (y_predict == y)).item()
 
         optimizer.zero_grad()
         train_loss += loss.item()
@@ -104,7 +102,7 @@ def train(model: nn.Module,
         loss.backward()
 
         optimizer.step()
-        total += torch.sum(y_mask.view(-1)).item()
+        total += torch.sum(w_mask.view(-1)).item()
 
     train_loss /= train_iteration
     train_accuracy = correct / total
