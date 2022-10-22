@@ -84,14 +84,6 @@ def train(model: nn.Module,
 
         y_predict = model(x, att_mask)
 
-        # try:
-        #     y_predict = model(x, att_mask)
-        # except:
-        #     print(x.shape)
-        #     print(att_mask.shape)
-        #     continue
-        # print(y_predict.shape)
-
         y_predict = y_predict.view(-1, y_predict.shape[2])
         loss = criterion(y_predict, y)
 

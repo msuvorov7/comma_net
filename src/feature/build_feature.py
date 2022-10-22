@@ -31,34 +31,76 @@ targets = {',': 1, '.': 2}
 
 
 class ContentWrapper:
+    """
+    Класс для обработки сырого текста
+    """
     def __init__(self, max_size: int):
+        """
+         Конструктор для класса. Создает пустой массив подстрок
+        :param max_size: максимальный размер токенов подстроки (.split())
+        """
         self.batches = []
         self.max_size = max_size
 
     def fit(self, text):
-        sentence_splitted = text.split()
+        """
+        Разделить длинную строку на подстроки каждая их которых
+        не более чем из max_size токенов. Потребность в методе связана
+        с тем, чтобы уметь обрабатывать очень длинные последовательности.
+        Для bert модели установлен лимит на длину в 500 токенов.
+        Дополнительно приводит текст к нижнему регистру.
+        :param text: Строка из текста, которую нужно разделить на подстроки
+        :return:
+        """
+        sentence_splitted = text.lower().split()
         for i in tqdm(range(0, len(sentence_splitted), self.max_size)):
             self.batches.append(' '.join(sentence_splitted[i:i + self.max_size]))
         return self
 
-    def get_split(self):
+    def get_split(self) -> list:
+        """
+        Вернуть массив подстрок из исходной строки
+        :return:
+        """
         return self.batches
 
 
 def extract_sample(directiry_path: str, mode: str, sample_size: int):
+    """
+    Вспомогательная функция для взятия подвыборки из датасета
+    :param directiry_path: путь до raw директории
+    :param mode: train или test файл бьем
+    :param sample_size: количество строк в выборке
+    :return: сохраняет файл в суффиксом _sample.csv
+    """
     dataset_path = directiry_path + f'{mode}.csv'
     pd.read_csv(dataset_path, low_memory=False)['text'][:sample_size].to_csv(directiry_path + f'{mode}_sample.csv')
 
 
-def build_features(text: str):
+def build_features(text: str) -> tuple:
+    """
+    Функция для создания признаков в модель
+    Разберем принцип работы на примере:
+    text: 'казнить нельзя, помиловать.'
+    reshaped_text: ['казнить нельзя, помиловать.']
+    tokenized_text:[['[SOS]', 'казнить', 'нельзя', ',', 'помил', '#овать', '.', '[EOS]']]
+    input_tokens:  [['[SOS]', 'казнить', 'нельзя', 'помил', '#овать', '[EOS]']]  # не содержит target
+    input_targets: [[  0,        0,        1,        0,        2,        0   ]]  # помечаем токен ПЕРЕД таргетом
+    attention_mask:[[  1,        1,        1,        1,        1,        1   ]]  # нули будут говорить о <pad> - токенах
+    target_mask:   [[  1,        1,        1,        1,        0,        1   ]]  # для склейки токенов в одно слово
+    :param text: строка с текстом
+    :return:
+    """
     content = ContentWrapper(max_size=150).fit(text)
     reshaped_text = content.get_split()
     # text = ['казнить, нельзя помиловать#.', 'привет со дна #38.', 'что-то пошло не так (.']
     # text = text[0:1]
     tokenized_text = [tokenizer.tokenize(sent) for sent in reshaped_text]
+    # для моделей BERT проставляем токены на начало и конец последовательностей
     tokenized_text = [['[SOS]'] + sentence + ['[EOS]'] for sentence in tokenized_text]
     # print(tokenized_text)
 
+    # удаляем из текста токены с классифицуремыми знаками препинания
     input_tokens = list(
         map(lambda sentence: list(
             filter(
@@ -112,6 +154,11 @@ def build_features(text: str):
 
 
 def download_dataframe(filename: str) -> str:
+    """
+    Загрузка датасета в память и объединение всех записей в одну строку
+    :param filename: имя файла
+    :return: строка с текстом
+    """
     text = pd.read_csv(filename)['text'].fillna(' ').values
     text = ' '.join(text)
     return text
