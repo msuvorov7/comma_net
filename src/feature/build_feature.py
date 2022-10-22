@@ -4,6 +4,7 @@ import os
 import pickle
 import sys
 
+import numpy as np
 import pandas as pd
 import yaml
 from tqdm import tqdm
@@ -87,18 +88,16 @@ def build_features(text: str) -> tuple:
     input_tokens:  [['[SOS]', 'казнить', 'нельзя', 'помил', '#овать', '[EOS]']]  # не содержит target
     input_targets: [[  0,        0,        1,        0,        2,        0   ]]  # помечаем токен ПЕРЕД таргетом
     attention_mask:[[  1,        1,        1,        1,        1,        1   ]]  # нули будут говорить о <pad> - токенах
-    target_mask:   [[  1,        1,        1,        1,        0,        1   ]]  # для склейки токенов в одно слово
+    words_mask:    [[  1,        1,        1,        0,        1,        1   ]]  # для склейки токенов в одно слово
     :param text: строка с текстом
     :return:
     """
     content = ContentWrapper(max_size=150).fit(text)
     reshaped_text = content.get_split()
-    # text = ['казнить, нельзя помиловать#.', 'привет со дна #38.', 'что-то пошло не так (.']
-    # text = text[0:1]
+
     tokenized_text = [tokenizer.tokenize(sent) for sent in reshaped_text]
     # для моделей BERT проставляем токены на начало и конец последовательностей
     tokenized_text = [['[SOS]'] + sentence + ['[EOS]'] for sentence in tokenized_text]
-    # print(tokenized_text)
 
     # удаляем из текста токены с классифицуремыми знаками препинания
     input_tokens = list(
@@ -109,48 +108,34 @@ def build_features(text: str) -> tuple:
         ),
             tokenized_text)
     )
-    # print(input_tokens)
 
+    # переводим токены в индексы
     input_ids = list(map(tokenizer.convert_tokens_to_ids, input_tokens))
     logging.info('input_ids created')
-    # print(input_ids)
 
-    def shift_target(arr: list) -> list:
-        res = []
-        for i in arr:
-            if i != 0:
-                res.pop()
-            res.append(i)
-        return res
-
-    input_targets = list(map(lambda sentence: shift_target([targets.get(x, 0) for x in sentence]), tokenized_text))
+    # находим и кодируем таргет, делаем по ним маску и сдвигаем влево на 1,
+    # удаляем из массива с таргетами элементы по индексам из маски. формально задача удалить элемент перед таргетом
+    target_tokens = list(map(lambda sentence: np.array([targets.get(x, 0) for x in sentence]), tokenized_text))
+    target_tokens_mask = [(target_sentence != 0).astype(int) for target_sentence in target_tokens]
+    remove_ids = [np.nonzero(np.roll(mask_sentence, -1)) for mask_sentence in target_tokens_mask]
+    input_targets = [np.delete(tokens, ids) for tokens, ids in zip(target_tokens, remove_ids)]
     logging.info('input_targets created')
-    # print(input_targets)
 
-    def mask_tokens(tokens: list) -> list:
-        res = []
-        for i in range(len(tokens) - 1):
-            if tokens[i + 1][0] != '#':
-                res.append(1)
-            elif tokens[i + 1] == '#':
-                res.append(1)
-            elif tokens[i + 1][0] == '#':
-                res.append(0)
-            else:
-                raise NotImplementedError
-        res.append(1)
-        assert len(res) == len(tokens)
-        return res
+    # находим цельное токен-слово, делаем сдвиг на 1 влево
+    is_full_token = lambda item: 0 if (item[0] == '#') & (item != '#') else 1
+    end_token_mask = list(map(lambda sentence: np.array([is_full_token(token) for token in sentence]), input_tokens))
+    words_mask = [np.roll(sentence, -1) for sentence in end_token_mask]
+    logging.info('words_mask created')
 
-    target_mask = list(map(lambda x: mask_tokens(x), input_tokens))
-    logging.info('target_mask created')
-    # print(target_mask)
-
-    attention_mask = list(map(lambda x: [1 for _ in range(len(x))], input_ids))
+    attention_mask = [np.ones(len(x)) for x in input_ids]
     logging.info('attention_mask created')
-    # print(attention_mask)
 
-    return input_ids, input_targets, target_mask, attention_mask
+    for inp, tar, word, attn in zip(input_ids, input_targets, words_mask, attention_mask):
+        assert (np.asarray(inp).shape == tar.shape == word.shape == attn.shape)
+
+    logging.info('checks passed')
+
+    return input_ids, input_targets, words_mask, attention_mask
 
 
 def download_dataframe(filename: str) -> str:
@@ -186,9 +171,11 @@ if __name__ == '__main__':
     else:
         dataset = download_dataframe(f'{data_raw_dir}{args.mode}.csv')
 
-    input_ids, input_targets, target_mask, attention_mask = build_features(dataset)
+    logging.info('dataset loaded')
 
-    comma_dataset = CommaDataset(input_ids, input_targets, target_mask, attention_mask)
+    inp_ids, inp_tar, w_mask, attn_mask = build_features(dataset)
+
+    comma_dataset = CommaDataset(inp_ids, inp_tar, w_mask, attn_mask)
 
     with open(data_processed_dir + f'{args.mode}_dataset.pkl', 'wb') as f:
         pickle.dump(comma_dataset, f)
