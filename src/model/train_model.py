@@ -62,6 +62,7 @@ def collate_fn(batch) -> dict:
 
 def train(model: nn.Module,
           training_data_loader: DataLoader,
+          validating_data_loader: DataLoader,
           criterion: nn.Module,
           optimizer: torch.optim.Optimizer,
           device: str):
@@ -75,8 +76,7 @@ def train(model: nn.Module,
     :return:
     """
     train_loss = 0.0
-    # train_accuracy = 0.0
-    train_iteration = 0
+    val_loss = 0.0
     correct = 0.0
     total = 0.0
 
@@ -98,16 +98,39 @@ def train(model: nn.Module,
 
         optimizer.zero_grad()
         train_loss += loss.item()
-        train_iteration += 1
         loss.backward()
 
         optimizer.step()
         total += torch.sum(w_mask.view(-1)).item()
 
-    train_loss /= train_iteration
+    train_loss /= len(training_data_loader)
     train_accuracy = correct / total
 
-    return train_loss, train_accuracy
+    correct = 0.0
+    total = 0.0
+    model.eval()
+    for batch in tqdm(validating_data_loader):
+        x, y, w_mask, att_mask = batch['feature'], batch['target'], batch['word_mask'], batch['attention_mask']
+        x = x.to(device)
+        y = y.view(-1).to(device)
+        w_mask = w_mask.view(-1).to(device)
+        att_mask = att_mask.to(device)
+
+        y_predict = model(x, att_mask)
+
+        y_predict = y_predict.view(-1, y_predict.shape[2])
+        loss = criterion(y_predict, y)
+
+        y_predict = torch.argmax(y_predict, dim=1).view(-1)
+        correct += torch.sum(w_mask * (y_predict == y)).item()
+
+        val_loss += loss.item()
+        total += torch.sum(w_mask.view(-1)).item()
+
+    val_loss /= len(validating_data_loader)
+    val_accuracy = correct / total
+
+    return train_loss, train_accuracy, val_loss, val_accuracy
 
 
 def fit(model: nn.Module,
@@ -137,14 +160,25 @@ def fit(model: nn.Module,
     val_accuracy = []
 
     for epoch in range(epochs):
-        train_loss, train_acc = train(model, training_data_loader, criterion, optimizer, device)
+        train_loss, train_acc, val_loss, val_acc = train(model,
+                                                         training_data_loader,
+                                                         validating_data_loader,
+                                                         criterion,
+                                                         optimizer,
+                                                         device
+                                                         )
         # val_loss, val_acc = test(model, testing_data_loader, criterion, device)
         # checkpoint(epoch, model, 'models')
+        print('Epoch: {}, Training Loss: {}, Validation Loss: {}, VAL_ACC: {}'.format(epoch,
+                                                                                      train_loss,
+                                                                                      val_loss,
+                                                                                      val_acc)
+              )
 
         train_losses.append(train_loss)
-        # val_losses.append(val_loss)
+        val_losses.append(val_loss)
         train_accuracy.append(train_acc)
-        # val_accuracy.append(val_acc)
+        val_accuracy.append(val_acc)
 
     plot_acc(train_accuracy, val_accuracy)
     plot_loss(train_losses, val_losses)

@@ -92,7 +92,7 @@ def build_features(text: str) -> tuple:
     :param text: строка с текстом
     :return:
     """
-    content = ContentWrapper(max_size=150).fit(text)
+    content = ContentWrapper(max_size=130).fit(text)
     reshaped_text = content.get_split()
 
     tokenized_text = [tokenizer.tokenize(sent) for sent in reshaped_text]
