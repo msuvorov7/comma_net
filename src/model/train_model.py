@@ -4,6 +4,7 @@ import os
 import pickle
 import sys
 
+import numpy as np
 import torch
 import torch.optim as optim
 import torch.nn as nn
@@ -16,7 +17,7 @@ sys.path.insert(0, os.path.dirname(
 ))
 
 from src.model.model import CommaModel
-from src.visualization.visualize import plot_loss, plot_acc
+from src.visualization.visualize import plot_loss, plot_acc, plot_conf_matrix
 
 
 fileDir = os.path.join(os.path.dirname(os.path.realpath(__file__)), '../../')
@@ -133,9 +134,67 @@ def train(model: nn.Module,
     return train_loss, train_accuracy, val_loss, val_accuracy
 
 
+def test(model: nn.Module,
+         test_data_loader: DataLoader,
+         num_classes: int,
+         device: str,
+         ):
+    correct = 0.0
+    total = 0.0
+
+    tp = np.zeros(1 + num_classes, dtype=np.int64)
+    fp = np.zeros(1 + num_classes, dtype=np.int64)
+    fn = np.zeros(1 + num_classes, dtype=np.int64)
+    cm = np.zeros((num_classes, num_classes), dtype=np.int64)
+
+    model.eval()
+    for batch in tqdm(test_data_loader):
+        x, y, w_mask, att_mask = batch['feature'], batch['target'], batch['word_mask'], batch['attention_mask']
+        x = x.to(device)
+        y = y.view(-1).to(device)
+        w_mask = w_mask.view(-1).to(device)
+        att_mask = att_mask.to(device)
+
+        y_predict = model(x, att_mask)
+        y_predict = y_predict.view(-1, y_predict.shape[2])
+        y_predict = torch.argmax(y_predict, dim=1).view(-1)
+
+        correct += torch.sum(w_mask * (y_predict == y)).item()
+        total += torch.sum(w_mask.view(-1)).item()
+
+        for i in range(y.shape[0]):
+            if w_mask[i] == 0:
+                # we can ignore this because we know there won't be
+                # any punctuation in this position since we created
+                # this position due to padding or sub-word tokenization
+                continue
+
+            cor = y[i]
+            prd = y_predict[i]
+            if cor == prd:
+                tp[cor] += 1
+            else:
+                fn[cor] += 1
+                fp[prd] += 1
+            cm[cor][prd] += 1
+
+    # ignore first index which is for no punctuation
+    tp[-1] = np.sum(tp[1:])
+    fp[-1] = np.sum(fp[1:])
+    fn[-1] = np.sum(fn[1:])
+
+    precision = tp / (tp + fp)
+    recall = tp / (tp + fn)
+    f1 = 2 * precision * recall / (precision + recall)
+    accuracy = correct / total
+
+    return precision, recall, f1, accuracy, cm
+
+
 def fit(model: nn.Module,
         training_data_loader: DataLoader,
         validating_data_loader: DataLoader,
+        testing_data_loader: DataLoader,
         epochs: int
         ) -> (list, list):
     """
@@ -143,6 +202,7 @@ def fit(model: nn.Module,
     :param model: модель
     :param training_data_loader: набор для обучения
     :param validating_data_loader: набор для валидации
+    :param testing_data_loader: набор для теста
     :param epochs: число эпох обучения
     :return:
     """
@@ -167,7 +227,6 @@ def fit(model: nn.Module,
                                                          optimizer,
                                                          device
                                                          )
-        # val_loss, val_acc = test(model, testing_data_loader, criterion, device)
         # checkpoint(epoch, model, 'models')
         print('Epoch: {}, Training Loss: {}, Validation Loss: {}, VAL_ACC: {}'.format(epoch,
                                                                                       train_loss,
@@ -180,6 +239,11 @@ def fit(model: nn.Module,
         train_accuracy.append(train_acc)
         val_accuracy.append(val_acc)
 
+    precision, recall, f1, accuracy, cm = test(model, testing_data_loader, 3, device)
+    print('precision: {}, recall: {}, f1: {}, accuracy: {}'.format(precision, recall, f1, accuracy))
+    logging.info(f'confusion matrix:\n{cm}')
+
+    plot_conf_matrix(cm, ['space', 'comma', 'dot'])
     plot_acc(train_accuracy, val_accuracy)
     plot_loss(train_losses, val_losses)
 
@@ -234,5 +298,5 @@ if __name__ == '__main__':
 
     logging.info(f'model created')
 
-    fit(comma_net, train_loader, valid_loader, args.epoch)
+    fit(comma_net, train_loader, valid_loader, test_loader, args.epoch)
     save_model(comma_net, fileDir + config['models'])
