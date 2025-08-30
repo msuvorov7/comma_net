@@ -1,0 +1,12 @@
+torch~=2.4.1
+torchmetrics~=1.6.0
+pytorch-lightning~=2.5.0
+pandas~=2.2.3
+numpy~=1.23.5
+PyYAML~=6.0.2
+scikit-learn~=1.6.1
+tokenizers~=0.21.0
+transformers~=4.51.1
+onnx~=1.17.0
+onnxruntime~=1.19.2
+matplotlib~=3.9.4
