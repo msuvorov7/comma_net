@@ -1,26 +1,22 @@
-import argparse
-import logging
 import os
-import pickle
+import re
 import sys
+import yaml
+import torch
+import logging
+import argparse
 
 import numpy as np
-import torch
-import torch.optim as optim
+import pandas as pd
 import torch.nn as nn
-import yaml
+import pytorch_lightning as pl
+
 from torch.utils.data import DataLoader, random_split
-from tqdm import tqdm
 
-sys.path.insert(0, os.path.dirname(
-    os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
-))
+from src.model.model import CommaModel, ModelLightning
+from src.feature.dataset import CommaV2, collate_fn, TARGETS, TOKENIZER
+from src.visualization.visualize import plot_conf_matrix
 
-from src.model.model import CommaModel
-from src.visualization.visualize import plot_loss, plot_acc, plot_conf_matrix
-
-
-fileDir = os.path.join(os.path.dirname(os.path.realpath(__file__)), '../../')
 
 logging.basicConfig(
     level=logging.INFO,
@@ -31,224 +27,15 @@ logging.basicConfig(
 )
 
 
-def collate_fn(batch) -> dict:
-    """
-    Обработчик батча перед входом в модель.
-    Забивает предложения pad-токенами до длинны самого длинного
-    предложения в батче
-    :param batch: батч данных
-    :return:
-    """
-    max_len = max(len(row["feature"]) for row in batch)
-
-    input_ids = torch.empty((len(batch), max_len), dtype=torch.long)
-    input_target = torch.empty((len(batch), max_len), dtype=torch.long)
-    word_mask = torch.empty((len(batch), max_len), dtype=torch.long)
-    attention_mask = torch.empty((len(batch), max_len), dtype=torch.long)
-
-    for idx, row in enumerate(batch):
-        to_pad = max_len - len(row["feature"])
-        input_ids[idx] = torch.cat((row["feature"], torch.zeros(to_pad)))
-        input_target[idx] = torch.cat((row["target"], torch.zeros(to_pad)))
-        word_mask[idx] = torch.cat((row["word_mask"], torch.zeros(to_pad)))
-        attention_mask[idx] = torch.cat((row["attention_mask"], torch.zeros(to_pad)))
-
-    return {
-        'feature': input_ids,
-        'target': input_target,
-        'word_mask': word_mask,
-        'attention_mask': attention_mask
-    }
+def save_tokenizer(tokenizer, directory_path: str) -> None:
+    if not os.path.exists(directory_path):
+        os.makedirs(directory_path)
+    tokenizer_path = os.path.join(directory_path, 'distilrubert_tokenizer.json')    
+    tokenizer.backend_tokenizer.save(tokenizer_path)
+    logging.info(f'tokenizer saved: {tokenizer_path}')
 
 
-def train(model: nn.Module,
-          training_data_loader: DataLoader,
-          validating_data_loader: DataLoader,
-          criterion: nn.Module,
-          optimizer: torch.optim.Optimizer,
-          device: str):
-    """
-    функция для обучения на одной эпохе
-    :param model: модель для обучения
-    :param training_data_loader: тренировочный DataLoader
-    :param criterion: функция потерь
-    :param optimizer: оптимизатор
-    :param device: cuda или cpu
-    :return:
-    """
-    train_loss = 0.0
-    val_loss = 0.0
-    correct = 0.0
-    total = 0.0
-
-    model.train()
-    for batch in tqdm(training_data_loader):
-        x, y, w_mask, att_mask = batch['feature'], batch['target'], batch['word_mask'], batch['attention_mask']
-        x = x.to(device)
-        y = y.view(-1).to(device)
-        w_mask = w_mask.view(-1).to(device)
-        att_mask = att_mask.to(device)
-
-        y_predict = model(x, att_mask)
-
-        y_predict = y_predict.view(-1, y_predict.shape[2])
-        loss = criterion(y_predict, y)
-
-        y_predict = torch.argmax(y_predict, dim=1).view(-1)
-        correct += torch.sum(w_mask * (y_predict == y)).item()
-
-        optimizer.zero_grad()
-        train_loss += loss.item()
-        loss.backward()
-
-        optimizer.step()
-        total += torch.sum(w_mask.view(-1)).item()
-
-    train_loss /= len(training_data_loader)
-    train_accuracy = correct / total
-
-    correct = 0.0
-    total = 0.0
-    model.eval()
-    for batch in tqdm(validating_data_loader):
-        x, y, w_mask, att_mask = batch['feature'], batch['target'], batch['word_mask'], batch['attention_mask']
-        x = x.to(device)
-        y = y.view(-1).to(device)
-        w_mask = w_mask.view(-1).to(device)
-        att_mask = att_mask.to(device)
-
-        y_predict = model(x, att_mask)
-
-        y_predict = y_predict.view(-1, y_predict.shape[2])
-        loss = criterion(y_predict, y)
-
-        y_predict = torch.argmax(y_predict, dim=1).view(-1)
-        correct += torch.sum(w_mask * (y_predict == y)).item()
-
-        val_loss += loss.item()
-        total += torch.sum(w_mask.view(-1)).item()
-
-    val_loss /= len(validating_data_loader)
-    val_accuracy = correct / total
-
-    return train_loss, train_accuracy, val_loss, val_accuracy
-
-
-def test(model: nn.Module,
-         test_data_loader: DataLoader,
-         num_classes: int,
-         device: str,
-         ):
-    correct = 0.0
-    total = 0.0
-
-    tp = np.zeros(1 + num_classes, dtype=np.int64)
-    fp = np.zeros(1 + num_classes, dtype=np.int64)
-    fn = np.zeros(1 + num_classes, dtype=np.int64)
-    cm = np.zeros((num_classes, num_classes), dtype=np.int64)
-
-    model.eval()
-    for batch in tqdm(test_data_loader):
-        x, y, w_mask, att_mask = batch['feature'], batch['target'], batch['word_mask'], batch['attention_mask']
-        x = x.to(device)
-        y = y.view(-1).to(device)
-        w_mask = w_mask.view(-1).to(device)
-        att_mask = att_mask.to(device)
-
-        y_predict = model(x, att_mask)
-        y_predict = y_predict.view(-1, y_predict.shape[2])
-        y_predict = torch.argmax(y_predict, dim=1).view(-1)
-
-        correct += torch.sum(w_mask * (y_predict == y)).item()
-        total += torch.sum(w_mask.view(-1)).item()
-
-        for i in range(y.shape[0]):
-            if w_mask[i] == 0:
-                # we can ignore this because we know there won't be
-                # any punctuation in this position since we created
-                # this position due to padding or sub-word tokenization
-                continue
-
-            cor = y[i]
-            prd = y_predict[i]
-            if cor == prd:
-                tp[cor] += 1
-            else:
-                fn[cor] += 1
-                fp[prd] += 1
-            cm[cor][prd] += 1
-
-    # ignore first index which is for no punctuation
-    tp[-1] = np.sum(tp[1:])
-    fp[-1] = np.sum(fp[1:])
-    fn[-1] = np.sum(fn[1:])
-
-    precision = tp / (tp + fp)
-    recall = tp / (tp + fn)
-    f1 = 2 * precision * recall / (precision + recall)
-    accuracy = correct / total
-
-    return precision, recall, f1, accuracy, cm
-
-
-def fit(model: nn.Module,
-        training_data_loader: DataLoader,
-        validating_data_loader: DataLoader,
-        testing_data_loader: DataLoader,
-        epochs: int
-        ) -> (list, list):
-    """
-    Основной цикл обучения по эпохам
-    :param model: модель
-    :param training_data_loader: набор для обучения
-    :param validating_data_loader: набор для валидации
-    :param testing_data_loader: набор для теста
-    :param epochs: число эпох обучения
-    :return:
-    """
-
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
-
-    model = model.to(device)
-
-    optimizer = optim.Adam(model.parameters(), lr=1e-3)
-    criterion = nn.CrossEntropyLoss()
-
-    train_losses = []
-    val_losses = []
-    train_accuracy = []
-    val_accuracy = []
-
-    for epoch in range(epochs):
-        train_loss, train_acc, val_loss, val_acc = train(model,
-                                                         training_data_loader,
-                                                         validating_data_loader,
-                                                         criterion,
-                                                         optimizer,
-                                                         device
-                                                         )
-        # checkpoint(epoch, model, 'models')
-        print('Epoch: {}, Training Loss: {}, Validation Loss: {}, VAL_ACC: {}'.format(epoch,
-                                                                                      train_loss,
-                                                                                      val_loss,
-                                                                                      val_acc)
-              )
-
-        train_losses.append(train_loss)
-        val_losses.append(val_loss)
-        train_accuracy.append(train_acc)
-        val_accuracy.append(val_acc)
-
-    precision, recall, f1, accuracy, cm = test(model, testing_data_loader, 3, device)
-    print('precision: {}, recall: {}, f1: {}, accuracy: {}'.format(precision, recall, f1, accuracy))
-    logging.info(f'confusion matrix:\n{cm}')
-
-    plot_conf_matrix(cm, ['space', 'comma', 'dot'])
-    plot_acc(train_accuracy, val_accuracy)
-    plot_loss(train_losses, val_losses)
-
-
-def save_model(model: nn.Module, directory_path: str) -> None:
+def save_state_dict(model: nn.Module, directory_path: str) -> None:
     """
     функция для сохранения состояния модели
     :param model: модель
@@ -257,46 +44,123 @@ def save_model(model: nn.Module, directory_path: str) -> None:
     """
     if not os.path.exists(directory_path):
         os.makedirs(directory_path)
-    model_path = directory_path + 'model.torch'
-    torch.save(model, model_path)
-    logging.info(f'model saved: {model_path}')
+    model_path = os.path.join(directory_path, 'comma_model.sd')
+    torch.save(model.state_dict(), model_path)
+    logging.info(f'state_dict saved: {model_path}')
+
+
+def export_to_onnx(model: nn.Module, directory_path: str) -> None:
+    if not os.path.exists(directory_path):
+        os.makedirs(directory_path)
+    model_path = os.path.join(directory_path, 'comma_model.onnx')
+    
+    dummy_input = (torch.randint(0, TOKENIZER.vocab_size, size=(1, 128)), torch.ones(1, 128, dtype=torch.int64))
+    torch.onnx.export(
+        model,
+        dummy_input,
+        model_path,
+        input_names=['x', 'attn_mask'],
+        output_names=['output'],
+        dynamic_axes={'x': {0: 'batch_size', 1: 'seq_len'}, 'attn_mask': {0: 'batch_size', 1: 'seq_len'}},
+    )
+
+    logging.info(f'exported to onnx: {model_path}')
+
+
+def normalize(text: pd.Series) -> pd.Series:
+    normalize_pattern = re.compile(r'[^а-яa-z0-9\s\,\.\-]')
+    return (
+        text
+        .dropna()
+        .apply(lambda item: item.lower().replace('—', '-'))
+        .apply(lambda item: re.sub(normalize_pattern, '', item))
+    )
 
 
 if __name__ == '__main__':
     args_parser = argparse.ArgumentParser()
     args_parser.add_argument('--config', default='params.yaml', dest='config')
-    args_parser.add_argument('--epoch', default=1, type=int, dest='epoch')
+    args_parser.add_argument('--epochs', default=1, type=int, dest='epochs')
+    args_parser.add_argument('--batch_size', default=64, dest='batch_size', type=int)
+    args_parser.add_argument('--accumulate_grad_batches', default=1, dest='accumulate_grad_batches', type=int)
     args = args_parser.parse_args()
 
-    assert args.epoch > 0
+    assert args.epochs > 0
 
-    with open(fileDir + args.config) as conf_file:
+    with open(args.config) as conf_file:
         config = yaml.safe_load(conf_file)
 
-    data_processed_dir = fileDir + config['data']['processed']
+    # data load
+    train_df = pd.read_parquet('data/raw/test.parquet', columns=['text'])
+    test_df = pd.read_parquet('data/raw/test.parquet', columns=['text'])
+    
+    train_text = normalize(train_df['text']).values.tolist()[:]
+    test_text = normalize(train_df['text']).values.tolist()[:]
 
-    with open(data_processed_dir + f'train_dataset.pkl', 'rb') as f:
-        train_dataset = pickle.load(f)
-    with open(data_processed_dir + f'test_dataset.pkl', 'rb') as f:
-        test_dataset = pickle.load(f)
-
-    logging.info(f'datasets loaded')
-
+    train_dataset = CommaV2(
+        data=train_text,
+        tokenizer=TOKENIZER,
+        max_length=128,
+        mode='train',
+    )
+    test_dataset = CommaV2(
+        data=test_text,
+        tokenizer=TOKENIZER,
+        max_length=128,
+        mode='test',
+    )
     train_size = len(train_dataset)
     validation_size = int(0.3 * train_size)
 
-    train_data, valid_data = random_split(train_dataset, [train_size - validation_size, validation_size],
-                                          generator=torch.Generator().manual_seed(42)
-                                          )
-    train_loader = DataLoader(train_data, batch_size=32, collate_fn=collate_fn, shuffle=True)
-    valid_loader = DataLoader(valid_data, batch_size=32, collate_fn=collate_fn, shuffle=False)
-    test_loader = DataLoader(test_dataset, batch_size=32, collate_fn=collate_fn, shuffle=False)
+    train_dataset, valid_dataset = random_split(
+        train_dataset, [train_size - validation_size, validation_size],
+        generator=torch.Generator().manual_seed(42)
+    )
+    valid_dataset.mode = 'valid'
+    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, collate_fn=collate_fn, shuffle=True)
+    valid_loader = DataLoader(valid_dataset, batch_size=args.batch_size, collate_fn=collate_fn, shuffle=False)
+    test_loader = DataLoader(test_dataset, batch_size=args.batch_size, collate_fn=collate_fn, shuffle=False)
+    logging.info(f'datasets loaded')
 
-    comma_net = CommaModel(num_class=3)
-    for param in comma_net.pretrained_transformer.parameters():
-        param.requires_grad = False
-
+    # init model
+    comma_net = CommaModel(num_class=len(TARGETS) + 1)
+    criterion = nn.CrossEntropyLoss(weight=torch.tensor([0.15, 0.35, 0.35, 0.15]))
+    model = ModelLightning(
+        model=comma_net,
+        criterion=criterion,
+        t_max=int(len(train_dataset) / (args.batch_size * args.accumulate_grad_batches) + 1) * args.epochs,
+        lr=1e-3,
+    )
     logging.info(f'model created')
 
-    fit(comma_net, train_loader, valid_loader, test_loader, args.epoch)
-    save_model(comma_net, fileDir + config['models'])
+    # train
+    lr_callback =pl.callbacks.LearningRateMonitor(
+        logging_interval='step',
+    )
+    trainer = pl.Trainer(
+        accelerator='mps',
+        # logger=logger,
+        callbacks=[lr_callback, ],
+        max_epochs=args.epochs,
+        accumulate_grad_batches=args.accumulate_grad_batches,
+        precision="bf16-mixed",
+        log_every_n_steps=1,
+        enable_checkpointing=True,
+        enable_progress_bar=True,
+        gradient_clip_val=5,
+        use_distributed_sampler=True,
+    )
+
+    trainer.fit(
+        model,
+        train_dataloaders=train_loader,
+        val_dataloaders=valid_loader,
+    )
+    trainer.test(model, dataloaders=test_loader)
+
+    cm = model.conf_matrix.compute()
+    plot_conf_matrix(cm, ['none',] + list(TARGETS))
+
+    save_tokenizer(TOKENIZER, config['models'])
+    save_state_dict(model.model, config['models'])
+    export_to_onnx(model.model, config['models'])

@@ -1,24 +1,16 @@
 import argparse
 import logging
 import os
-import re
 import sys
 
-import torch
-import torch.nn as nn
 import yaml
-from torch.utils.data import DataLoader
+import onnxruntime
+import numpy as np
 
-sys.path.insert(0, os.path.dirname(
-    os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
-))
+from tokenizers import Tokenizer
 
-from src.feature.build_feature import build_features, ContentWrapper
-from src.feature.dataset import CommaDataset
-from src.model.train_model import collate_fn
+from src.feature.dataset import IND_TO_TARGET_TOKEN
 
-
-fileDir = os.path.join(os.path.dirname(os.path.realpath(__file__)), '../../')
 
 logging.basicConfig(
     level=logging.INFO,
@@ -28,74 +20,14 @@ logging.basicConfig(
     ]
 )
 
-decode_map = {0: '', 1: ',', 2: '.'}
 
-
-def decode(words_original_case: list, y_predict: torch.Tensor, w_mask: torch.Tensor) -> str:
-    result = ""
-    decode_idx = 0
-
-    for index in range(w_mask.shape[0]):
-        if w_mask[index] == 1:
-            if words_original_case[decode_idx] not in ('SOS', 'EOS'):
-                result += words_original_case[decode_idx]
-                result += decode_map[y_predict[index].item()]
-                result += ' '
-            decode_idx += 1
-
-    result = result.strip()
-    return result
-
-
-def predict(text: str, model: nn.Module) -> str:
-
-    content = ContentWrapper(max_size=150).fit(text)
-    reshaped_text = content.get_split()
-
-    input_ids, input_targets, word_mask, attention_mask = build_features(text)
-
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    model.to(device)
-
-    batch_size = 32
-    dataset = CommaDataset(input_ids, input_targets, word_mask, attention_mask)
-    test_dataloader = DataLoader(dataset, batch_size=batch_size, collate_fn=collate_fn, shuffle=False)
-
-    result = ""
-    with torch.no_grad():
-        for i, batch in enumerate(test_dataloader):
-            x, y, w_mask, att_mask = batch['feature'], batch['target'], batch['word_mask'], batch['attention_mask']
-            w_mask = w_mask.view(-1)
-            x = x.to(device)
-            att_mask = att_mask.to(device)
-            y_predict = model(x, att_mask)
-
-            y_predict = y_predict.view(-1, y_predict.shape[2])
-            y_predict = torch.argmax(y_predict, dim=1).view(-1)
-
-            print(y_predict)
-
-            string = ' '.join(list(
-                map(
-                    lambda sent: 'SOS ' + sent + ' EOS',
-                    reshaped_text[i * batch_size: i * batch_size + batch_size]
-                )
-            ))
-            words_original_case = list(filter(lambda word: word not in (' ', ''), re.split('(\W)', string)))
-            print(words_original_case)
-            result += decode(words_original_case, y_predict, w_mask) + ' '
-    return result
-
-
-def load_model(directory_path: str) -> nn.Module:
-    """
-    функция для загрузки модели
-    :param directory_path: имя директории
-    :return:
-    """
-    model_path = directory_path + 'model.torch'
-    model = torch.load(model_path)
-    return model
+def loader(text: str, max_length: int, batch_size: int):
+    words = text.split()
+    data = []
+    for i in range(0, len(words), max_length):
+        data.append(' '.join(words[i: i + max_length]))
+    for i in range(0, len(data), batch_size):
+        yield data[i: i + batch_size]
 
 
 if __name__ == '__main__':
@@ -103,18 +35,52 @@ if __name__ == '__main__':
     args_parser.add_argument('--config', default='params.yaml', dest='config')
     args = args_parser.parse_args()
 
-    with open(fileDir + args.config) as conf_file:
+    with open(args.config) as conf_file:
         config = yaml.safe_load(conf_file)
+    
+    onnx_model = onnxruntime.InferenceSession(os.path.join(config['models'], 'comma_model.onnx'))
+    tokenizer = Tokenizer.from_file(os.path.join(config['models'], 'distilrubert_tokenizer.json'))
+    tokenizer.enable_padding()
 
-    model = load_model(fileDir + config['models'])
-    logging.info(f'model loaded')
+    text = ' '.join([
+        'привет извини что голосовой просто мне так проще будет объяснить первое домашнее задание этому было реализовать крестики нолики',
+        'с помощью обучения с подкреплением и библиотеки джим',
+        'а втовое домашнее задание было доказать форму или расписать я здесь не светник потому что я не сделала и испугалась математики',
+        'но возможно я смогу потом найти из клинф презентации',
+        'а третье это было насем домашняя работа ты была вроде кактрольная которая можно было доделать дома там тоже какая то графовая модель',
+        'и есть вероятности и ну кажется почитать вероятностиь какого то события я тоже здесь и советник потому что все пугае',
+        'математике ну могу поискать может быть меня в диалогах',
+        'с кем то это осталось задание вот и на последний паре что такого еще одну задачу она есть его презентации и она указыана как задача',
+        'а вот две предыдущие я не уверен что указано поэтому и последнее можно найти на гитхаб в презентации',
+    ])
+    batch_size = 3
+    max_words = 80
 
-    text = """
-    Это аналитический жанр  Он не столько информационный сколько 
-    аналитический Тут осмысливаем события приводим какие-то 
-    примеры и исследуем явления"""
+    result = []
+    for batch in loader(text, max_words, batch_size):
+        inputs = tokenizer.encode_batch(
+            batch,
+            add_special_tokens=True,
+        )
+        input_ids = np.asarray([_.ids for _ in inputs]).astype(np.int64).reshape(len(batch), -1)
+        attention_mask = np.asarray([_.attention_mask for _ in inputs]).astype(np.int64).reshape(len(batch), -1)
 
-    predicted = predict(text, model)
-    logging.info('answer is ready:')
+        model_input = {
+            onnx_model.get_inputs()[0].name: input_ids,
+            onnx_model.get_inputs()[1].name: attention_mask,
+        }
+        model_output = onnx_model.run(None, model_input)[0].argmax(axis=-1).reshape(len(batch), -1)
 
-    print(predicted)
+        decoded_batch = []
+        for i in range(len(batch)):
+            sentence_tokens = []
+            for tok, trg in zip(input_ids[i], model_output[i]):
+                sentence_tokens.append(tok)
+                if trg != 0:
+                    sentence_tokens.append(IND_TO_TARGET_TOKEN[trg])
+            decoded_batch.append(sentence_tokens)
+
+        result += tokenizer.decode_batch(decoded_batch, skip_special_tokens=True)
+
+    for s in ' '.join(result).split('.'):
+        print(s.strip() + '.')

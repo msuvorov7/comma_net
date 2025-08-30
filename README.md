@@ -2,7 +2,7 @@
 
 ## Нейросеть для расстановки знаков препинания
 
-Модель на основе `DeepPavlov/rubert-base-cased-sentence`.
+Модель на основе `DeepPavlov/distilrubert-tiny-cased-conversational-v1`.
 
 [Статья](https://habr.com/ru/company/barsgroup/blog/563854/), с которой все началось.
 [Репозиторий](https://github.com/sviperm/neuro-comma) ребят.
@@ -10,14 +10,17 @@
 
 Обучение происходило на датасете новостей Ленты.
 
-Для запуска пайплайна обучения: `dvc repro`
+Загрузка датасета:
+```python
+python -m src.data_load.data_load --test_size=0.35
+```
 
-Для запуска с обученной моделью: `python src/model/predict.py`. Входной текст задается в этом же файле.
+Для запуска пайплайна обучения:
+```python
+python -m src.model.train_model --epoch=2
+```
 
-### Планы по улучшению:
-- ~~сделать валидацию~~
-- ~~сделать тестирование и сохранять confusion matrix~~
-- обучить модель на GPU на большем числе образцов и эпох
-- переписать [predict](./src/model/predict.py) для удобного инференса
-- добавить поддержку новых знаков препинации (и адекватно написать их в коде)
-- обновить документацию и вывести статистику по метрикам
+Для запуска с обученной моделью: 
+```python
+python -m src.model.predict
+```

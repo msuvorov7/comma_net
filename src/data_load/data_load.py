@@ -10,11 +10,6 @@ import yaml
 from six.moves import urllib
 from sklearn.model_selection import train_test_split
 
-sys.path.insert(0, os.path.dirname(
-    os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
-))
-
-fileDir = os.path.join(os.path.dirname(os.path.realpath(__file__)), '../../')
 
 logging.basicConfig(
     level=logging.INFO,
@@ -59,13 +54,14 @@ def train_test_split_dataset(directory_path: str, test_size: float):
     """
     df = pd.read_csv(directory_path + 'lenta.csv')
 
-    train, test, _, _ = train_test_split(df,
-                                         np.zeros(len(df)),
-                                         test_size=test_size,
-                                         random_state=42
-                                         )
-    train.to_csv(directory_path + 'train.csv', index=False)
-    test.to_csv(directory_path + 'test.csv', index=False)
+    train, test, _, _ = train_test_split(
+        df,
+        np.zeros(len(df)),
+        test_size=test_size,
+        random_state=42,
+    )
+    train.to_parquet(directory_path + 'train.parquet', index=False)
+    test.to_parquet(directory_path + 'test.parquet', index=False)
 
     logging.info(f'train/test splits created')
 
@@ -78,9 +74,9 @@ if __name__ == '__main__':
 
     assert args.test_size > 0
 
-    with open(fileDir + args.config) as conf_file:
+    with open(args.config) as conf_file:
         config = yaml.safe_load(conf_file)
 
-    data_raw_dir = fileDir + config['data']['raw']
+    data_raw_dir = config['data']['raw']
     download_dataset(data_raw_dir)
     train_test_split_dataset(data_raw_dir, args.test_size)
