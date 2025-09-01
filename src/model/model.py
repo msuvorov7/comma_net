@@ -31,6 +31,18 @@ class CommaModel(nn.Module):
         x = self.pretrained_transformer(x, attention_mask=attn_masks)[0]
         x = self.linear(x)
         return x
+    
+
+class FocalLoss(nn.Module):
+    def __init__(self, alpha=1.0, gamma=2.0):
+        super().__init__()
+        self.alpha = alpha
+        self.gamma = gamma
+
+    def forward(self, inputs, targets):
+        bce_loss = F.cross_entropy(inputs, targets)
+        loss = self.alpha * (1 - torch.exp(-bce_loss)) ** self.gamma * bce_loss
+        return loss
 
 
 class ModelLightning(pl.LightningModule):
