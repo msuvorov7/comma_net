@@ -13,7 +13,7 @@ import pytorch_lightning as pl
 
 from torch.utils.data import DataLoader, random_split
 
-from src.model.model import CommaModel, ModelLightning
+from src.model.model import CommaModel, FocalLoss, ModelLightning
 from src.feature.dataset import CommaV2, collate_fn, TARGETS, TOKENIZER
 from src.visualization.visualize import plot_conf_matrix
 
@@ -124,7 +124,8 @@ if __name__ == '__main__':
 
     # init model
     comma_net = CommaModel(num_class=len(TARGETS) + 1)
-    criterion = nn.CrossEntropyLoss(weight=torch.tensor([0.1, 0.35, 0.35, 0.1, 0.1]))
+    # criterion = nn.CrossEntropyLoss(weight=torch.tensor([0.1, 0.35, 0.35, 0.1, 0.1]))
+    criterion = FocalLoss(alpha=4, gamma=2)
     model = ModelLightning(
         model=comma_net,
         criterion=criterion,
