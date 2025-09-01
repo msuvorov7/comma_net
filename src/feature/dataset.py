@@ -7,9 +7,9 @@ from torch.utils.data import Dataset
 from transformers import DistilBertTokenizerFast
 
 
-TARGETS = (',', '.', '-',)
-IND_TO_TARGET_TOKEN = {1: 20, 2: 24, 3: 45,}
-TARGET_TOKEN_TO_IDS = {20: 1, 24: 2, 45: 3,}
+TARGETS = (',', '.', '-', '_')
+IND_TO_TARGET_TOKEN = {1: 20, 2: 24, 3: 45, 4: 107}
+TARGET_TOKEN_TO_IDS = {20: 1, 24: 2, 45: 3, 107: 4}
 TOKENIZER = DistilBertTokenizerFast.from_pretrained('DeepPavlov/distilrubert-tiny-cased-conversational-v1')
 
 
@@ -82,16 +82,22 @@ class CommaV2(Dataset):
             text = self.augmentation.sample_string(text)
             text = self.augmentation.make_error(text)
 
-        inputs = self.tokenizer.encode(
+        inputs = self.tokenizer.encode_plus(
             text,
             add_special_tokens=True,
             max_length=self.max_length,
             truncation=True,
+            return_offsets_mapping=True,
         )
 
         x, y, attn_mask = [], [], []
-        for token in inputs:
+        for i in range(len(inputs['input_ids'])):
+            token = inputs['input_ids'][i]
             if token in self.target_token_to_ids:
+                if token == 45:
+                    # отличаем дефис от тире
+                    if (inputs['offset_mapping'][i][0] == inputs['offset_mapping'][i - 1][1]):
+                        token = 107
                 y.pop()
                 y.append(self.target_token_to_ids[token])
             else:

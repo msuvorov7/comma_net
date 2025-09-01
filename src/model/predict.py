@@ -82,5 +82,8 @@ if __name__ == '__main__':
 
         result += tokenizer.decode_batch(decoded_batch, skip_special_tokens=True)
 
+    # postprocessing
     for s in ' '.join(result).split('.'):
-        print(s.strip() + '.')
+        print(
+            (s.replace(' _ ', '-').strip() + '.').capitalize()
+        )

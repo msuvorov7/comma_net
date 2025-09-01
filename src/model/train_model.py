@@ -124,7 +124,7 @@ if __name__ == '__main__':
 
     # init model
     comma_net = CommaModel(num_class=len(TARGETS) + 1)
-    criterion = nn.CrossEntropyLoss(weight=torch.tensor([0.15, 0.35, 0.35, 0.15]))
+    criterion = nn.CrossEntropyLoss(weight=torch.tensor([0.1, 0.35, 0.35, 0.1, 0.1]))
     model = ModelLightning(
         model=comma_net,
         criterion=criterion,
