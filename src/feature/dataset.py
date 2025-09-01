@@ -7,9 +7,9 @@ from torch.utils.data import Dataset
 from transformers import DistilBertTokenizerFast
 
 
-TARGETS = (',', '.', '-', '_')
-IND_TO_TARGET_TOKEN = {1: 20, 2: 24, 3: 45, 4: 107}
-TARGET_TOKEN_TO_IDS = {20: 1, 24: 2, 45: 3, 107: 4}
+TARGETS = (',', '.', '-', '_', '?', '!')
+IND_TO_TARGET_TOKEN = {1: 20, 2: 24, 3: 45, 4: 107, 5: 39, 6: 67}
+TARGET_TOKEN_TO_IDS = {20: 1, 24: 2, 45: 3, 107: 4, 39: 5, 67: 6}
 TOKENIZER = DistilBertTokenizerFast.from_pretrained('DeepPavlov/distilrubert-tiny-cased-conversational-v1')
 
 
@@ -146,13 +146,15 @@ if __name__ == '__main__':
     # only for debugging
 
     df = pd.read_parquet('data/raw/test.parquet', columns=['text'])
-    normalize_pattern = re.compile(r'[^а-яa-z0-9\s\,\.\-]')
+    normalize_pattern = re.compile(r'[^а-яa-z0-9\s\,\.\-\?\!]')
     text = (
         df['text']
         .dropna()
         .apply(lambda item: item.lower())
         .apply(lambda item: re.sub(normalize_pattern, '', item))
     ).values.tolist()
+
+    print(len([1 for t in text if '!' in t]))
     
     dataset = CommaV2(
         data=text,

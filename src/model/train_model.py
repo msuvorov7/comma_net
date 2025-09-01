@@ -68,7 +68,7 @@ def export_to_onnx(model: nn.Module, directory_path: str) -> None:
 
 
 def normalize(text: pd.Series) -> pd.Series:
-    normalize_pattern = re.compile(r'[^а-яa-z0-9\s\,\.\-]')
+    normalize_pattern = re.compile(r'[^а-яa-z0-9\s\,\.\-\?\!]')
     return (
         text
         .dropna()
